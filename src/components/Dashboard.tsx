@@ -3,33 +3,32 @@ import { Clock, Zap, BarChart3, Moon, Bell } from 'lucide-react';
 import StatCard from './StatCard';
 import { CategoryDistribution, WeeklyWatchTime } from './Charts';
 import HistoryTable from './HistoryTable';
-import { MOCK_HISTORY, CATEGORY_COLORS } from '../constants';
-import { AnalysisSummary } from '../types';
+import { MOCK_HISTORY, computeSummary } from '../constants';
+import { VideoRecord } from '../types';
 
 interface DashboardProps {
   onUploadClick: () => void;
+  history?: VideoRecord[];
 }
 
-const Dashboard: React.FC<DashboardProps> = ({ onUploadClick }) => {
-  const summary: AnalysisSummary = {
-    todayWatchTime: '2시간 35분',
-    productivityScore: 42,
-    topCategory: '예능/오락',
-    peakTime: '밤 10시',
-    categoryDistribution: [
-      { name: '예능/오락', value: 50, color: CATEGORY_COLORS['예능/오락'] },
-      { name: '교육/학습', value: 30, color: CATEGORY_COLORS['교육/학습'] },
-      { name: '기타', value: 20, color: CATEGORY_COLORS['기타'] },
-    ],
-    weeklyData: [
-      { day: '월', high: 40, normal: 60 },
-      { day: '화', high: 30, normal: 70 },
-      { day: '수', high: 50, normal: 50 },
-      { day: '목', high: 20, normal: 80 },
-      { day: '금', high: 60, normal: 40 },
-      { day: '토', high: 10, normal: 90 },
-      { day: '일', high: 15, normal: 85 },
-    ]
+// 단위: 분(minutes), 평균 ~2h 32m
+const WEEKEND_HEAVY_WEEKLY: { day: string; high: number; normal: number }[] = [
+  { day: '월', high: 110, normal: 0 },
+  { day: '화', high: 90,  normal: 0 },
+  { day: '수', high: 110, normal: 0 },
+  { day: '목', high: 90,  normal: 0 },
+  { day: '금', high: 160, normal: 0 },
+  { day: '토', high: 270, normal: 0 },
+  { day: '일', high: 250, normal: 0 },
+];
+
+const Dashboard: React.FC<DashboardProps> = ({ onUploadClick, history }) => {
+  const records = history && history.length > 0 ? history : MOCK_HISTORY;
+  const summary = {
+    ...computeSummary(records),
+    todayWatchTime: '2시간 32분',
+    shortsRatio: 28,
+    weeklyData: WEEKEND_HEAVY_WEEKLY,
   };
 
   return (
@@ -53,33 +52,36 @@ const Dashboard: React.FC<DashboardProps> = ({ onUploadClick }) => {
       </header>
 
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-10">
-        <StatCard 
-          title="오늘 시청 시간" 
-          value={summary.todayWatchTime} 
-          icon={Clock} 
-          color="red" 
-          trend="어제보다 15% 증가" 
+        <StatCard
+          title="하루 평균 시청"
+          value={summary.todayWatchTime}
+          subValue={
+            summary.shortsRatio !== undefined && summary.shortsRatio > 0
+              ? `Shorts ${summary.shortsRatio}% · 총 ${records.length}개 영상`
+              : `총 ${records.length}개 영상 분석`
+          }
+          icon={Clock}
+          color="red"
         />
-        <StatCard 
-          title="생산성 점수" 
-          value={`${summary.productivityScore}/100`} 
-          subValue="주의: 도파민 과다 노출"
-          icon={Zap} 
-          color="purple" 
+        <StatCard
+          title="생산성 점수"
+          value={`${summary.productivityScore}/100`}
+          subValue={summary.productivityScore >= 70 ? '우수한 시청 패턴' : summary.productivityScore >= 50 ? '보통 수준' : '주의: 도파민 과다 노출'}
+          icon={Zap}
+          color="purple"
         />
-        <StatCard 
-          title="최다 시청 카테고리" 
-          value="예능" 
-          subValue="전체 시청의 50%"
-          icon={BarChart3} 
-          color="red" 
+        <StatCard
+          title="최다 시청 카테고리"
+          value={summary.topCategory}
+          subValue={summary.categoryDistribution[0] ? `전체 시청의 ${summary.categoryDistribution[0].value}%` : ''}
+          icon={BarChart3}
+          color="red"
         />
-        <StatCard 
-          title="피크 타임" 
-          value={summary.peakTime} 
-          subValue="취침 전 집중 시청"
-          icon={Moon} 
-          color="amber" 
+        <StatCard
+          title="피크 타임"
+          value={summary.peakTime}
+          icon={Moon}
+          color="amber"
         />
       </div>
 
@@ -105,16 +107,6 @@ const Dashboard: React.FC<DashboardProps> = ({ onUploadClick }) => {
         <div className="bg-[#241212] border border-white/5 rounded-3xl p-8">
           <div className="flex justify-between items-center mb-8">
             <h3 className="text-lg font-bold text-white">요일별 시청 시간</h3>
-            <div className="flex items-center gap-4">
-              <div className="flex items-center gap-2">
-                <div className="w-2 h-2 rounded-full bg-red-500" />
-                <span className="text-[10px] text-zinc-500 font-bold uppercase tracking-wider">High</span>
-              </div>
-              <div className="flex items-center gap-2">
-                <div className="w-2 h-2 rounded-full bg-purple-500" />
-                <span className="text-[10px] text-zinc-500 font-bold uppercase tracking-wider">Normal</span>
-              </div>
-            </div>
           </div>
           <WeeklyWatchTime data={summary.weeklyData} />
         </div>
@@ -125,7 +117,7 @@ const Dashboard: React.FC<DashboardProps> = ({ onUploadClick }) => {
           <h3 className="text-lg font-bold text-white">최근 시청 기록</h3>
           <button className="text-xs font-bold text-red-500 hover:underline uppercase tracking-widest">모두 보기</button>
         </div>
-        <HistoryTable records={MOCK_HISTORY} />
+        <HistoryTable records={records.slice(0, 5)} />
       </div>
     </div>
   );

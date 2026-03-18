@@ -1,4 +1,4 @@
-import { Category } from './types';
+import { Category, VideoRecord, AnalysisSummary } from './types';
 
 export const CATEGORIES: Category[] = [
   '지식/정보',
@@ -19,6 +19,88 @@ export const CATEGORY_COLORS: Record<Category, string> = {
   '음악': '#ec4899', // pink-500
   '기타': '#64748b'  // slate-500
 };
+
+export function computeSummary(records: VideoRecord[]): AnalysisSummary {
+  if (records.length === 0) {
+    return {
+      todayWatchTime: '0개 영상',
+      productivityScore: 0,
+      topCategory: '기타',
+      peakTime: '-',
+      categoryDistribution: [],
+      weeklyData: ['월', '화', '수', '목', '금', '토', '일'].map(day => ({ day, high: 0, normal: 0 })),
+    };
+  }
+
+  const avgScore = Math.round(records.reduce((sum, r) => sum + r.score, 0) / records.length);
+
+  const uniqueDays = new Set(records.map(r => new Date(r.timestamp).toLocaleDateString())).size;
+
+  // 실제 영상 시간(초) 합산 → 하루 평균 시청 시간 계산
+  const recordsWithDuration = records.filter(r => typeof r.duration === 'number');
+  const hasDurationData = recordsWithDuration.length > 0;
+
+  let todayWatchTime: string;
+  if (hasDurationData) {
+    const totalSeconds = recordsWithDuration.reduce((sum, r) => sum + (r.duration ?? 0), 0);
+    const avgSecondsPerDay = uniqueDays > 0 ? totalSeconds / uniqueDays : totalSeconds;
+    const avgMinutes = Math.round(avgSecondsPerDay / 60);
+    const h = Math.floor(avgMinutes / 60);
+    const m = avgMinutes % 60;
+    todayWatchTime = h > 0 ? `하루 평균 ${h}h ${m}m` : `하루 평균 ${m}m`;
+  } else {
+    // 영상 시간 데이터 없을 때 기존 방식(개수)으로 대체
+    const avgPerDay = uniqueDays > 0 ? (records.length / uniqueDays).toFixed(1) : records.length;
+    todayWatchTime = `하루 평균 ${avgPerDay}개`;
+  }
+
+  // Shorts 비율 계산
+  const shortsCount = records.filter(r => r.isShorts === true).length;
+  const shortsRatio = records.length > 0 ? Math.round((shortsCount / records.length) * 100) : 0;
+
+  const catCount: Partial<Record<Category, number>> = {};
+  records.forEach(r => { catCount[r.category] = (catCount[r.category] || 0) + 1; });
+  const topCategory = (Object.entries(catCount).sort((a, b) => b[1] - a[1])[0][0]) as Category;
+
+  const hourCount: Record<number, number> = {};
+  records.forEach(r => {
+    const hour = new Date(r.timestamp).getHours();
+    hourCount[hour] = (hourCount[hour] || 0) + 1;
+  });
+  const sortedHours = Object.entries(hourCount).sort((a, b) => b[1] - a[1]);
+  console.log("📊 시간대별 시청 분포 (로컬 시간):", sortedHours.slice(0, 5).map(([h, c]) => `${h}시 ${c}회`).join(", "));
+  const peakHour = parseInt(sortedHours[0]?.[0] ?? '0');
+  const peakTime = `${peakHour < 12 ? '오전' : '오후'} ${peakHour % 12 || 12}시`;
+
+  const total = records.length;
+  const categoryDistribution = (Object.entries(catCount) as [Category, number][])
+    .map(([name, count]) => ({
+      name,
+      value: Math.round((count / total) * 100),
+      color: CATEGORY_COLORS[name],
+    }))
+    .sort((a, b) => b.value - a.value);
+
+  const days = ['일', '월', '화', '수', '목', '금', '토'];
+  const weeklyMap: Record<string, { high: number; normal: number }> = {};
+  ['월', '화', '수', '목', '금', '토', '일'].forEach(d => { weeklyMap[d] = { high: 0, normal: 0 }; });
+  records.forEach(r => {
+    const day = days[new Date(r.timestamp).getDay()];
+    if (r.score >= 70) weeklyMap[day].high++;
+    else weeklyMap[day].normal++;
+  });
+  const weeklyData = ['월', '화', '수', '목', '금', '토', '일'].map(day => ({ day, ...weeklyMap[day] }));
+
+  return {
+    todayWatchTime,
+    productivityScore: avgScore,
+    topCategory,
+    peakTime,
+    categoryDistribution,
+    weeklyData,
+    shortsRatio,
+  };
+}
 
 export const MOCK_HISTORY: any[] = [
   {

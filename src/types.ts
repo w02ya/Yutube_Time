@@ -14,6 +14,8 @@ export interface VideoRecord {
   category: Category;
   score: number;
   timestamp: string;
+  duration?: number;  // seconds
+  isShorts?: boolean;
 }
 
 export interface AnalysisSummary {
@@ -23,4 +25,5 @@ export interface AnalysisSummary {
   peakTime: string;
   categoryDistribution: { name: string; value: number; color: string }[];
   weeklyData: { day: string; high: number; normal: number }[];
+  shortsRatio?: number;
 }
